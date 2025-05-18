@@ -12,15 +12,24 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 from sklearn.metrics import r2_score
 from sklearn.metrics import confusion_matrix, precision_score, accuracy_score, recall_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (
+    f1_score, 
+    accuracy_score, 
+    precision_score, 
+    recall_score, 
+    roc_auc_score, 
+    confusion_matrix, 
+    roc_curve
+)
 from sklearn.model_selection import train_test_split
 import base64
 import pydeck as pdk
 import seaborn as sns
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import StandardScaler
 import plotly.graph_objects as go
+from streamlit.components.v1 import html
+
 
 # Ajustamos las medidas de la pantalla para el dashboard
 st.markdown("""
@@ -64,6 +73,25 @@ def get_img_as_base64(file_path):
     return base64.b64encode(data).decode()
 
 img_base64 = get_img_as_base64("./img/LOGO.png")
+
+def create_metric_card(title: str, value: str, icon: str = "") -> str:
+    """Devuelve un snippet HTML para una tarjeta de métrica."""
+    return f"""
+    <div style="
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        padding: 16px;
+        text-align: center;
+        font-family: 'Segoe UI', sans-serif;
+    ">
+        <div style="font-size: 2.5rem;">{icon}</div>
+        <div style="font-size: 1.1rem; color: #555;">{title}</div>
+        <div style="font-size: 1.8rem; font-weight: 600; margin-top: 8px;">
+            {value}
+        </div>
+    </div>
+    """
 
 components.html(f"""
     <style>
@@ -117,7 +145,7 @@ def load_data():
     dM=dM.drop('Unnamed: 0', axis = 1)
     dV=dV.drop('Unnamed: 0', axis = 1)
     dMx=dMx.drop('Unnamed: 0', axis = 1)
-    
+
     #Cambiamos object por numeric
     dQ['host_identity_verified'] = dQ['host_identity_verified'].replace({'f': 0, 't': 1})
     dQ['instant_bookable'] = dQ['instant_bookable'].replace({'f': 0, 't': 1})
@@ -134,7 +162,7 @@ def load_data():
         'Hotel room': 4
     })
 
-    
+
     dM['host_identity_verified'] = dM['host_identity_verified'].replace({'f': 0, 't': 1})
     dM['instant_bookable'] = dM['instant_bookable'].replace({'f': 0, 't': 1})
     dM['host_is_superhost'] = dM['host_is_superhost'].replace({'f': 0, 't': 1})
@@ -149,7 +177,7 @@ def load_data():
         'Hotel room': 4
     })
 
-    
+
     dV['host_identity_verified'] = dV['host_identity_verified'].replace({'f': 0, 't': 1})
     dV['instant_bookable'] = dV['instant_bookable'].replace({'f': 0, 't': 1})
     dV['host_is_superhost'] = dV['host_is_superhost'].replace({'f': 0, 't': 1})
@@ -164,7 +192,7 @@ def load_data():
         'Hotel room': 4
     })
 
-    
+
     dMx['host_identity_verified'] = dMx['host_identity_verified'].replace({'f': 0, 't': 1})
     dMx['instant_bookable'] = dMx['instant_bookable'].replace({'f': 0, 't': 1})
     dMx['host_is_superhost'] = dMx['host_is_superhost'].replace({'f': 0, 't': 1})
@@ -212,6 +240,37 @@ def load_data():
 
 dQ, dM, dV, dMx, numeric_cols, text_cols, numeric_cols2 = load_data()
 
+st.markdown("""
+    <style>
+    /* Sidebar con degradado morado → azul */
+    section[data-testid="stSidebar"] {
+        /* Degradado vertical */
+        background: linear-gradient(
+            180deg,
+            #D1C4E9 0%,   /* lila claro */
+            #BBDEFB 100%  /* azul cielo */
+        );
+        color: #343A40;      /* texto en gris oscuro para contraste */
+        padding: 20px;
+        border-right: none; 
+    }
+
+    /* Asegura que los headings en el sidebar sean legibles */
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #343A40;
+    }
+
+    /* Etiquetas de widgets en el sidebar */
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] .stMarkdown p {
+        color: #343A40;
+        font-weight: 600;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 #Sidebar 
 st.sidebar.image("./img/LOGO.png")
 with st.sidebar: 
@@ -222,22 +281,95 @@ with st.sidebar:
         default_index = 0, 
         orientation = "vertical",
         styles = {
-            "container" : {"padding": "5px", "background-color": "#B7CDE2"},
+            "container" : {"padding": "5px", "background-color": "#transparent"},
             "icon" : {"color": "#2C3E50", "font-size" : "40px"},
             "nav-link": {
                 "font-size": "0px",
                 "text-align": "center",
                 "margin": "0px",
-                "--hover-color": "#B39CD0", 
             },
             "nav-link-selected": {"background-color": "#B7CDE2"},
         }
     )
 
+
 #Home Page
 if pagina == "Home Page": 
-    st.image("./img/GROWTHTRACK.png", use_container_width=True)
     st.markdown("Aquí puedes explorar diversos análisis de datos de la ciudad seleccionada. Visualiza tendencias, distribuciones y aplica modelos predictivos fácilmente.")
+    st.image("./img/GROWTHTRACK.png", use_container_width=True)
+
+     # — Selección de sitio en Home Page —
+    st.title("Indicadores Clave")
+    st.markdown("Estos indicadores te ofrecen una visión rápida del desempeño de la ciudad seleccionada. Incluyen precio promedio, nivel de satisfacción de los huéspedes y número total de alojamientos, para que identifiques de un vistazo las tendencias y oportunidades más relevantes.")
+    col1, col2, col3 = st.columns([1,2,3])
+    with col1:
+        st.markdown("### Seleccione un País")
+    with col2:
+        pais = st.selectbox("", ["México", "Canada", "Malta"])
+    with col3:
+        rutas = {
+            "México": ["CDMX"],
+            "Canada": ["Victoria", "Quebec"],
+            "Malta": ["Malta"]
+        }
+        ciudad = st.selectbox("", rutas[pais])
+
+    # — Mapeo ciudad → DataFrame —
+    df_map = {
+        "CDMX":    dMx,
+        "Victoria": dV,
+        "Quebec":   dQ,
+        "Malta":    dM
+    }
+    df_city = df_map[ciudad].copy()
+
+    descripciones_ciudad = {
+        "CDMX":     "La Ciudad de México, CDMX, es la capital de México cuyo nombre oficial es Estados Unidos Mexicanos. Es casi la ciudad más poblada en Norte América. Localizada en su totalidad en el Valle de México, la altitud es de 2,240 metros (7,350 ft), aunque muchas partes de la ciudad están de alguna manera más arriba. La ciudad está compuesta por 16 divisiones territoriales conocidas desde 2016 como alcaldías. Como destino cultural es incomparable en América. Tiene más museos que cualquier otra ciudad en el planeta con la única excepción de Londres. La población de la ciudad se nutre de buena comida y una cultura exquisita que es la combinación no solo de las culturas previas, sino de múltiples influencias que han tocado la ciudad desde el extranjero.",
+        "Victoria": "Rodeada por agua, la capital de la Columbia Británica es famosa por su vida marítima y su puerto, aunque también encontrarás aquí excelentes museos y edificios históricos. Situada en la isla de Vancouver, en el oeste de Canadá, Victoria tiene el clima más cálido del país y más días de sol que Vancouver, una ciudad ubicada en el continente. Aprovecha al máximo el clima participando en algunas de las diversas actividades al aire libre de Victoria, como caminar por el puerto o tomar una excursión para observar a las ballenas. Cuando visites la ciudad, observa la arquitectura histórica, los autobuses de dos pisos, las casas de té y los jardines formales. Todo esto da fe de las raíces británicas de esta región.",
+        "Quebec":   "Esta provincia de habla francesa es el lugar de origen de poutine, Cirque du Soleil y Arcade Fire. Aquí el arte se desarrolla en algunas de las ciudades más antiguas del Nuevo Mundo. Desde el siglo XVI, cuando Jacques Cartier arribó a estas tierras, Quebec se convirtió en un enclave francés en Canadá. En la actualidad, el francés sigue siendo el idioma oficial de la provincia. Mantiene un estilo francés clásico en lo referente a la cocina, al arte y a la arquitectura. Visita las dos ciudades principales de Quebec para sentir un ambiente parisino en los bosques canadienses. Recorre la Ciudad de Quebec , la capital de la provincia, para obtener una verdadera experiencia del Quebec antiguo. Hoy en día, la ciudad parece más una capital europea que una ciudad portuaria fronteriza. Pasea por las calles empedradas del Centro histórico. Château Frontenac es uno de los principales monumentos de la ciudad. Es un distinguido hotel con apariencia de castillo, con vistas al puerto. Asimismo, el Hôtel du Parlement de 1886 es igual de majestuoso. En el centro de la Ciudad de Quebec, se encuentra La Citadelle, una fortaleza geométrica que sirvió de protección para la ciudad durante siglos. En la cercana ciudad de Baie-Saint-Paul, se creó el grupo teatral Cirque du Soleil en la década de los 80.",
+        "Malta":    "Disfruta la vista del hermoso mar Mediterráneo, admira templos antiguos y visita los excelentes museos de este fascinante país isleño. Malta es una nación isleña al sur de Sicilia, en el mar Mediterráneo. Sus visitantes pueden disfrutar su bellamente conservada arquitectura medieval, su interesante historia bélica y algunas de las estructuras más antiguas del mundo que aún se conservan en pie. Para explorar Malta, puedes comenzar por La Valeta, la capital del país. Fue fundada en honor de Jean Parisot de la Valette, Gran Maestre de los Caballeros Hospitalarios, luego de que éste lograra repeler al ejército invasor otomano. Visita la concatedral de San Juan, una impresionante estructura barroca construida y decorada por los caballeros de la orden. El piso está tapizado de lápidas de mármol incrustadas, las paredes están adornadas con obras de Caravaggio y otros artistas famosos y la iglesia resguarda también una impresionante colección de objetos históricos."
+    }
+
+    imagenes_ciudad = {
+        "CDMX":     "img/cdmx.jpg",
+        "Victoria": "img/victoria.jpg",
+        "Quebec":   "img/quebec.jpg",
+        "Malta":    "img/malta.jpg"
+    }
+
+
+    # Mostramos en dos columnas: texto a la izquierda, imagen a la derecha
+    txt_col, img_col = st.columns([2,1])
+    with txt_col:
+        st.markdown(f"### Descripción de {ciudad}:  \n"
+            f"{descripciones_ciudad.get(ciudad, 'No hay descripción disponible.')}"
+        )
+    with img_col:
+        st.image(imagenes_ciudad.get(ciudad, "img/default.jpg"), use_container_width=True, caption=ciudad)
+    st.markdown("---")
+
+    # Indicadores Clave mejorados
+    if not df_city.empty:
+        num_cols = df_city.select_dtypes("number").columns.tolist()
+        defaults = num_cols[:3] if len(num_cols) >= 3 else num_cols
+
+        cols = st.columns(3)
+        metrics = [
+            ("Precio Promedio", f"€{df_city['price'].mean():.2f}", "&#128181"),
+            ("Valoración Media", f"{df_city['review_scores_rating'].mean():.1f}/5" if 'review_scores_rating' in df_city else "N/A", "&#11088"),
+            ("Propiedades", len(df_city), "&#127976;&#65039")
+        ]
+
+        for (title, value, icon), col in zip(metrics, cols):
+            with col:
+                html(create_metric_card(title, value, icon=icon))
+    else:
+        st.warning("No hay datos disponibles para mostrar indicadores.")
+
+    st.markdown("---")
+
+
+###################################################################################################################################
 
 if pagina == "Lugares": 
     col1, col2, col3 = st.columns([1,2,3])
@@ -246,13 +378,13 @@ if pagina == "Lugares":
         st.markdown("### Selección de sitio")
 
     with col2:
-        pais=st.selectbox("",["México", "Canada", "Italia"])
+        pais=st.selectbox("",["México", "Canada", "Malta"])
 
     with col3:
         rutas = {
             "México": ["CDMX"],
             "Canada": ["Victoria", "Quebec"],
-            "Italia": ["Malta"]
+            "Malta": ["Malta"]
         }
         ciudad=st.selectbox("", rutas[pais])
 
@@ -325,7 +457,7 @@ if pagina == "Lugares":
 
             st.markdown("### Resumen estadístico")
             st.dataframe(dMx_filtrado.describe(), use_container_width=True)
-        
+
         if sub_opcion == "Univariado": 
             col1, col2 = st.columns(2)
 
@@ -333,7 +465,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución Superhosts")
                 freq_data = dMx['host_is_superhost'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -344,13 +476,13 @@ if pagina == "Lugares":
                     color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-                
+
             with col2:
                 st.subheader("Distribución Precios")
                 # Solución directa sin usar histograma intermedio
                 price_counts = dMx['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -364,7 +496,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución de Tipos de Habitación")
                 room_counts = dMx['room_type'].value_counts().reset_index()
                 room_counts.columns = ['room_type', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='room_type',
@@ -388,7 +520,7 @@ if pagina == "Lugares":
                     labels={'review_scores_rating': 'Puntuación', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-                    
+
             #Tabla de frecuencias
             st.subheader("Tablas Resumen de Frecuencias por Variable")
             # Variables categóricas de interés
@@ -411,7 +543,7 @@ if pagina == "Lugares":
 
         if sub_opcion == "Regresiones":
             st.title("Modelados Predictivos")
-                
+
             def crear_donut_metrica(valor, etiqueta, color="#83C5BE"):
                 # Si el valor es mayor a 1, lo escalamos para que se vea bien en el donut
                 if valor > 1:
@@ -449,10 +581,10 @@ if pagina == "Lugares":
                 # Calcular correlación con 'price'
                 corr_matrix = dMx[numeric_cols].corr()
                 correlaciones_con_price = corr_matrix['price'].drop('price').abs()
-                
+
                 columnas_filtradas = correlaciones_con_price[correlaciones_con_price >= 0.3].index.tolist()
                 columnas_heatmap = columnas_filtradas + ['price']
-                
+
                 # Generar heatmap
                 fig = px.imshow(
                     dMx[columnas_heatmap].corr().abs().round(2),
@@ -539,7 +671,7 @@ if pagina == "Lugares":
                         coef_deter = model.score(X, y)
                         coef_correl = np.sqrt(coef_deter) if coef_deter >= 0 else 0
 
-                    
+
                         col1, col2 = st.columns([3, 1])
 
                         with col1:
@@ -794,7 +926,7 @@ if pagina == "Lugares":
 
             st.markdown("### Resumen estadístico")
             st.dataframe(dQ_filtrado.describe(), use_container_width=True)
-        
+
         if sub_opcion == "Univariado": 
             col1, col2 = st.columns(2)
 
@@ -802,7 +934,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución Superhosts")
                 freq_data = dQ['host_is_superhost'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -813,13 +945,13 @@ if pagina == "Lugares":
                     color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-                
+
             with col2:
                 st.subheader("Distribución Precios")
                 # Solución directa sin usar histograma intermedio
                 price_counts = dQ['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -833,7 +965,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución de Tipos de Habitación")
                 room_counts = dQ['room_type'].value_counts().reset_index()
                 room_counts.columns = ['room_type', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='room_type',
@@ -857,7 +989,7 @@ if pagina == "Lugares":
                     labels={'review_scores_rating': 'Puntuación', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-                    
+
             #Tabla de frecuencias
             st.subheader("Tablas Resumen de Frecuencias por Variable")
             # Variables categóricas de interés
@@ -880,7 +1012,7 @@ if pagina == "Lugares":
 
         if sub_opcion == "Regresiones":
             st.title("Modelados Predictivos")
-                
+
             def crear_donut_metrica(valor, etiqueta, color="#83C5BE"):
                 # Si el valor es mayor a 1, lo escalamos para que se vea bien en el donut
                 if valor > 1:
@@ -918,10 +1050,10 @@ if pagina == "Lugares":
                 # Calcular correlación con 'price'
                 corr_matrix = dQ[numeric_cols].corr()
                 correlaciones_con_price = corr_matrix['price'].drop('price').abs()
-                
+
                 columnas_filtradas = correlaciones_con_price[correlaciones_con_price >= 0.3].index.tolist()
                 columnas_heatmap = columnas_filtradas + ['price']
-                
+
                 # Generar heatmap
                 fig = px.imshow(
                     dQ[columnas_heatmap].corr().abs().round(2),
@@ -1008,7 +1140,7 @@ if pagina == "Lugares":
                         coef_deter = model.score(X, y)
                         coef_correl = np.sqrt(coef_deter) if coef_deter >= 0 else 0
 
-                    
+
                         col1, col2 = st.columns([3, 1])
 
                         with col1:
@@ -1262,7 +1394,7 @@ if pagina == "Lugares":
 
             st.markdown("### Resumen estadístico")
             st.dataframe(dV_filtrado.describe(), use_container_width=True)
-        
+
         if sub_opcion == "Univariado": 
             col1, col2 = st.columns(2)
 
@@ -1270,7 +1402,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución Superhosts")
                 freq_data = dV['host_is_superhost'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -1281,13 +1413,13 @@ if pagina == "Lugares":
                     color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-                
+
             with col2:
                 st.subheader("Distribución Precios")
                 # Solución directa sin usar histograma intermedio
                 price_counts = dV['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -1301,7 +1433,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución de Tipos de Habitación")
                 room_counts = dV['room_type'].value_counts().reset_index()
                 room_counts.columns = ['room_type', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='room_type',
@@ -1325,7 +1457,7 @@ if pagina == "Lugares":
                     labels={'review_scores_rating': 'Puntuación', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-                    
+
             #Tabla de frecuencias
             st.subheader("Tablas Resumen de Frecuencias por Variable")
             # Variables categóricas de interés
@@ -1348,7 +1480,7 @@ if pagina == "Lugares":
 
         if sub_opcion == "Regresiones":
             st.title("Modelados Predictivos")
-                
+
             def crear_donut_metrica(valor, etiqueta, color="#83C5BE"):
                 # Si el valor es mayor a 1, lo escalamos para que se vea bien en el donut
                 if valor > 1:
@@ -1386,10 +1518,10 @@ if pagina == "Lugares":
                 # Calcular correlación con 'price'
                 corr_matrix = dV[numeric_cols].corr()
                 correlaciones_con_price = corr_matrix['price'].drop('price').abs()
-                
+
                 columnas_filtradas = correlaciones_con_price[correlaciones_con_price >= 0.3].index.tolist()
                 columnas_heatmap = columnas_filtradas + ['price']
-                
+
                 # Generar heatmap
                 fig = px.imshow(
                     dV[columnas_heatmap].corr().abs().round(2),
@@ -1476,7 +1608,7 @@ if pagina == "Lugares":
                         coef_deter = model.score(X, y)
                         coef_correl = np.sqrt(coef_deter) if coef_deter >= 0 else 0
 
-                    
+
                         col1, col2 = st.columns([3, 1])
 
                         with col1:
@@ -1663,8 +1795,8 @@ if pagina == "Lugares":
                     st.info("Selecciona una variable dependiente dicotómica y al menos una independiente.")
 
 ###########################################################################################################################################################    
-    if pais == "Italia" and ciudad == "Malta":
-        st.title("Malta Italia")
+    if pais == "Maqlta" and ciudad == "Malta":
+        st.title("Malta")
         sub_opcion = option_menu(
             menu_title=None,
             options=["DataBase", "Univariado", "Regresiones"],
@@ -1733,7 +1865,7 @@ if pagina == "Lugares":
 
             st.markdown("### Resumen estadístico")
             st.dataframe(dM_filtrado.describe(), use_container_width=True)
-        
+
         if sub_opcion == "Univariado": 
             col1, col2 = st.columns(2)
 
@@ -1741,7 +1873,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución Superhosts")
                 freq_data = dM['host_is_superhost'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -1752,13 +1884,13 @@ if pagina == "Lugares":
                     color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-                
+
             with col2:
                 st.subheader("Distribución Precios")
                 # Solución directa sin usar histograma intermedio
                 price_counts = dM['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -1772,7 +1904,7 @@ if pagina == "Lugares":
                 st.subheader("Distribución de Tipos de Habitación")
                 room_counts = dM['room_type'].value_counts().reset_index()
                 room_counts.columns = ['room_type', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='room_type',
@@ -1796,7 +1928,7 @@ if pagina == "Lugares":
                     labels={'review_scores_rating': 'Puntuación', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-                    
+
             #Tabla de frecuencias
             st.subheader("Tablas Resumen de Frecuencias por Variable")
             # Variables categóricas de interés
@@ -1819,7 +1951,7 @@ if pagina == "Lugares":
 
         if sub_opcion == "Regresiones":
             st.title("Modelados Predictivos")
-                
+
             def crear_donut_metrica(valor, etiqueta, color="#83C5BE"):
                 # Si el valor es mayor a 1, lo escalamos para que se vea bien en el donut
                 if valor > 1:
@@ -1857,10 +1989,10 @@ if pagina == "Lugares":
                 # Calcular correlación con 'price'
                 corr_matrix = dM[numeric_cols].corr()
                 correlaciones_con_price = corr_matrix['price'].drop('price').abs()
-                
+
                 columnas_filtradas = correlaciones_con_price[correlaciones_con_price >= 0.3].index.tolist()
                 columnas_heatmap = columnas_filtradas + ['price']
-                
+
                 # Generar heatmap
                 fig = px.imshow(
                     dM[columnas_heatmap].corr().abs().round(2),
@@ -1947,7 +2079,7 @@ if pagina == "Lugares":
                         coef_deter = model.score(X, y)
                         coef_correl = np.sqrt(coef_deter) if coef_deter >= 0 else 0
 
-                    
+
                         col1, col2 = st.columns([3, 1])
 
                         with col1:
@@ -2132,8 +2264,9 @@ if pagina == "Lugares":
                         st.plotly_chart(crear_donut_metrica(sensibilidad, "Sensibilidad"), use_container_width=True, key="log_sens")
                 else:
                     st.info("Selecciona una variable dependiente dicotómica y al menos una independiente.")
-
+################################################VENTANA COMPARCAION#############################################################################################
 if pagina == "Comparacion": 
+    st.title("COMPARACIONES")
     sub_opcion = option_menu(
         menu_title=None,
         options=["Univariado", "Regresiones"],
@@ -2178,7 +2311,7 @@ if pagina == "Comparacion":
                 st.subheader("México")
                 room_counts = dMx['host_is_superhost'].value_counts().reset_index()
                 room_counts.columns = ['host_is_superhost', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='host_is_superhost',
@@ -2190,7 +2323,7 @@ if pagina == "Comparacion":
                 st.subheader("Malta")
                 room_counts = dM['host_is_superhost'].value_counts().reset_index()
                 room_counts.columns = ['host_is_superhost', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='host_is_superhost',
@@ -2198,12 +2331,12 @@ if pagina == "Comparacion":
                     title="host_is_superhost:",
                 )
                 st.plotly_chart(figure3, use_container_width=True)
-            
+
             with col2: 
                 st.subheader("Quebec")
                 room_counts = dQ['host_is_superhost'].value_counts().reset_index()
                 room_counts.columns = ['host_is_superhost', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='host_is_superhost',
@@ -2215,7 +2348,7 @@ if pagina == "Comparacion":
                 st.subheader("Victoria")
                 room_counts = dV['host_is_superhost'].value_counts().reset_index()
                 room_counts.columns = ['host_is_superhost', 'count']
-                
+
                 figure3 = px.pie(
                     room_counts,
                     names='host_is_superhost',
@@ -2223,7 +2356,7 @@ if pagina == "Comparacion":
                     title="host_is_superhost:",
                 )
                 st.plotly_chart(figure3, use_container_width=True)
-            
+
         if grafico == "Barplot":
             st.subheader("Distribución Habitaciones")
             col1, col2 = st.columns(2)
@@ -2232,7 +2365,7 @@ if pagina == "Comparacion":
                 st.subheader("México")
                 freq_data = dMx['room_type'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -2246,7 +2379,7 @@ if pagina == "Comparacion":
                 st.subheader("Malta")
                 freq_data = dM['room_type'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -2256,12 +2389,12 @@ if pagina == "Comparacion":
                     #color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-            
+
             with col2:
                 st.subheader("Quebec")
                 freq_data = dQ['room_type'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -2271,11 +2404,11 @@ if pagina == "Comparacion":
                     #color_discrete_map={0: '#6d38aa', 1: '#fbb77c'}
                 )
                 st.plotly_chart(figure1, use_container_width=True)
-                
+
                 st.subheader("Victoria")
                 freq_data = dV['room_type'].value_counts().reset_index()
                 freq_data.columns = ['category', 'count']
-                
+
                 figure1 = px.bar(
                     freq_data,
                     x='category',
@@ -2296,7 +2429,7 @@ if pagina == "Comparacion":
                 # Solución directa sin usar histograma intermedio
                 price_counts = dMx['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -2310,7 +2443,7 @@ if pagina == "Comparacion":
                 # Solución directa sin usar histograma intermedio
                 price_counts = dM['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -2319,13 +2452,13 @@ if pagina == "Comparacion":
                     labels={'price': 'Precio', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(figure2, use_container_width=True)
-            
+
             with col2: 
                 st.subheader("Quebec")
                 # Solución directa sin usar histograma intermedio
                 price_counts = dQ['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -2339,7 +2472,7 @@ if pagina == "Comparacion":
                 # Solución directa sin usar histograma intermedio
                 price_counts = dV['price'].value_counts().sort_index().reset_index()
                 price_counts.columns = ['price', 'count']
-                
+
                 figure2 = px.line(
                     price_counts,
                     x='price',
@@ -2348,7 +2481,7 @@ if pagina == "Comparacion":
                     labels={'price': 'Precio', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(figure2, use_container_width=True)
-            
+
         if grafico == "Scatterplot": 
             st.title("Puntuación de reviews")
             col1, col2 = st.columns(2)
@@ -2380,7 +2513,7 @@ if pagina == "Comparacion":
                     labels={'review_scores_rating': 'Puntuación', 'count': 'Frecuencia'}
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-                
+
             with col2: 
                 st.subheader("Quebec")
                 review_freq = dQ['review_scores_rating'].value_counts().reset_index()
@@ -2408,7 +2541,6 @@ if pagina == "Comparacion":
                 )
                 st.plotly_chart(fig2, use_container_width=True)
 
-
     elif sub_opcion == "Regresiones":
         tipo_regresion = option_menu(
             menu_title=None,
@@ -2424,594 +2556,272 @@ if pagina == "Comparacion":
                     "--hover-color": "#D6EAF8"
                 },
                 "nav-link-selected": {"background-color": "#AED6F1"},
+            })
+#####COMPARACIÓN REGRESION SIMPLE#######################################################################
+        if tipo_regresion == "Simple":
+            st.subheader("Regresión Lineal Simple")
+
+            tabs = st.tabs(["Entire home/apt", "Private room", "Shared room", "Hotel room"])
+            room_map = {
+                "Entire home/apt": (dMx[dMx["room_type"] == 1], dM[dM["room_type"] == 1], dQ[dQ["room_type"] == 1], dV[dV["room_type"] == 1]),
+                "Private room": (dMx[dMx["room_type"] == 2], dM[dM["room_type"] == 2], dQ[dQ["room_type"] == 2], dV[dV["room_type"] == 2]),
+                "Shared room": (dMx[dMx["room_type"] == 3], dM[dM["room_type"] == 3], dQ[dQ["room_type"] == 3], dV[dV["room_type"] == 4]),
+                "Hotel room": (dMx[dMx["room_type"] == 4], dM[dM["room_type"] == 4], dQ[dQ["room_type"] == 4], dV[dV["room_type"] == 3])
             }
-        )
-
-        if tipo_regresion == "Simple": 
-            #Entire home/apt
-            MxE= dMx[(dMx["room_type"] == 1)]
-            ME= dM[(dM["room_type"] == 1)]
-            QE= dQ[(dQ["room_type"] == 1)]
-            VE= dV[(dV["room_type"] == 1)]
-
-            st.title("Regresión Lineal Entire Home/APT")
-            col1, col2=  st.columns(2)
-
-            with col1:
-                st.subheader("México")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
-
-                X = MxE[[default_x]]
-                y = MxE[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Malta")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
-
-                X = ME[[default_x]]
-                y = ME[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-            
-            with col2:
-                st.subheader("Quebec")
-                default_x = "price" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "price" in numeric_cols2 else numeric_cols[0]
-
-                X = QE[[default_x]]
-                y = QE[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Victoria")
-                default_x = "host_response_rate" if "host_is_superhost" in numeric_cols2 else numeric_cols[0]
-                default_y = "host_is_superhost" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
-
-                X = VE[[default_x]]
-                y = VE[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-            
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-            # Private room
-            MxP= dMx[(dMx["room_type"] == 2)]
-            MP= dM[(dM["room_type"] == 2)]
-            QP= dQ[(dQ["room_type"] == 2)]
-            VP= dV[(dV["room_type"] == 2)]
-
-            st.title("Regresión Lineal Private Room")
-            col1, col2=  st.columns(2)
-
-            with col1:
-                st.subheader("México")
-                default_x = "host_identity_verified" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
-                default_y = "host_response_rate" if "host_identity_verified" in numeric_cols2 else numeric_cols[0]
-
-                X = MxP[[default_x]]
-                y = MxP[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Malta")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
-
-                X = MP[[default_x]]
-                y = MP[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-                
-            with col2:
-                st.subheader("Quebec")
-                default_x = "accommodates" if "price" in numeric_cols2 else numeric_cols[0]
-                default_y = "price" if "accommodates" in numeric_cols2 else numeric_cols[0]
-
-                X = QP[[default_x]]
-                y = QP[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Victoria")
-                default_x = "price" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "price" in numeric_cols2 else numeric_cols[0]
-
-                X = VP[[default_x]]
-                y = VP[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-            #Shared room
-            MxS= dMx[(dMx["room_type"] == 3)]
-            MS= dM[(dM["room_type"] == 3)]
-            QS= dQ[(dQ["room_type"] == 3)]
-            VS= dV[(dV["room_type"] == 4)]
-
-            st.title("Regresión Lineal Shared Room")
-            col1, col2=  st.columns(2)
-
-            with col1:
-                st.subheader("México")
-                default_x = "host_response_rate" if "instant_bookable" in numeric_cols2 else numeric_cols[0]
-                default_y = "instant_bookable" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
-
-                X = MxS[[default_x]]
-                y = MxS[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Malta")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
-
-                X = MS[[default_x]]
-                y = MS[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-            
-            with col2:
-                st.subheader("Quebec")
-                default_x = "host_response_rate" if "host_is_superhost" in numeric_cols2 else numeric_cols[0]
-                default_y = "host_is_superhost" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
-
-                X = QS[[default_x]]
-                y = QS[default_y]
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-
-                st.subheader("Victoria")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
-
-                X = VS[[default_x]]
-                y = VS[default_y]
-
-                if len(X) > 1:
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1, random_state=42)
+
+            for i, tipo in enumerate(room_map):
+                # Variables por defecto para cada tipo de alojamiento y región
+                variables_por_defecto = {
+                    "Entire home/apt": {
+                        "México": ("accommodates", "bathrooms"),
+                        "Malta": ("accommodates", "bathrooms"),
+                        "Quebec": ("accommodates", "price"),
+                        "Victoria": ("host_response_rate", "host_is_superhost"),
+                    },
+                    "Private room": {
+                        "México": ("host_identity_verified", "host_response_rate"),
+                        "Malta": ("host_response_rate", "host_is_superhost"),
+                        "Quebec": ("accommodates", "price"),
+                        "Victoria": ("price", "accommodates"),
+                    },
+                    "Shared room": {
+                        "México": ("instant_bookable", "host_response_rate"),
+                        "Malta": ("host_is_superhost", "bathrooms"),
+                        "Quebec": ("accommodates", "price"),
+                        "Victoria": ("minimum_nights", "price"),
+                    },
+                    "Hotel room": {
+                        "México": ("instant_bookable", "host_is_superhost"),
+                        "Malta": ("price", "host_response_rate"),
+                        "Quebec": ("host_is_superhost", "host_identity_verified"),
+                        "Victoria": ("price", "host_is_superhost"),
+                    }
+                }
+
+                with tabs[i]:
+                    st.title(f"{tipo}")
+                    Mx, M, Q, V = room_map[tipo]
+                    regiones = {"México": Mx, "Malta": M, "Quebec": Q, "Victoria": V}
+                    col1, col2 = st.columns(2)
+
+                    for j, (nombre_region, df_region) in enumerate(regiones.items()):
+                        with [col1, col2][j % 2]:
+                            st.subheader(nombre_region)
+                            # Asegura que las columnas existan en los datos
+                            if nombre_region == "Victoria" and tipo == "Shared room":
+                                st.warning(f"No hay suficientes datos válidos para las variables en Victoria.")
+                                continue  # saltar si VS está mal definido                            
+
+                            # Usar las variables por defecto definidas en el diccionario
+                            try:
+                                x_var, y_var = variables_por_defecto[tipo][nombre_region]
+                            except KeyError:
+                                st.warning(f"No se encontraron variables por defecto para {nombre_region} - {tipo}.")
+                                continue
+
+                            # Validar que X e Y no sean iguales
+                            if x_var == y_var:
+                                st.warning("Las variables X e Y no deben ser iguales.")
+                                continue
+
+                            # Verificar si las columnas existen en el DataFrame
+                            if x_var not in df_region.columns or y_var not in df_region.columns:
+                                st.warning(f"Las columnas '{x_var}' o '{y_var}' no existen en los datos de {nombre_region}.")
+                                continue
+
+                            X = df_region[[x_var]]
+                            y = df_region[y_var]
+
+
+                            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                            model = LinearRegression()
+                            model.fit(X_train, y_train)
+                            y_pred = model.predict(X_test)
+
+                            fig, ax = plt.subplots()
+                            ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
+                            ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
+                            ax.set_xlabel(x_var)
+                            ax.set_ylabel(y_var)
+                            ax.legend()
+                            st.pyplot(fig)
+
+                            with st.container():
+                                st.subheader("Resultados del Modelo")
+                                col10, col11, col12 = st.columns(3)
+                                with col10:
+                                    st.metric("Intercepto:", f"{model.intercept_:.2f}")
+                                with col11:
+                                    r2 = r2_score(y_test, y_pred)
+                                    st.metric("R²:", f"{r2:.2f}")
+                                with col12:
+                                    corr = np.sign(model.coef_[0]) * np.sqrt(r2)
+                                    st.metric("Correlación (R):", f"{corr:.2f}")
+
+#####COMPARACIÓN REGRESION MULTIPLE#######################################################################
+        if tipo_regresion == "Múltiple":
+            st.subheader("Regresión Lineal Múltiple")
+
+            variables_por_defecto = {
+                "México": (["price","bedrooms","number_of_reviews_ltm"], "accommodates"),
+                "Malta": (["accommodates", "beds"], "bedrooms"),
+                "Quebec": (["accommodates", "price", "beds"], "bedrooms"),
+                "Victoria": (["accommodates", "price", "beds"], "bedrooms")
+            }
+
+            regiones = {"México": dMx, "Malta": dM, "Quebec": dQ, "Victoria": dV}
+            col1, col2 = st.columns(2)
+
+            # Puedes elegir otro color hexadecimal si lo deseas
+            color_region = "#4B8BBE"  # azul ejemplo
+
+            for i, (nombre_region, df_region) in enumerate(regiones.items()):
+                with [col1, col2][i % 2]:
+                    st.markdown(f"<h3 style='color:{color_region}; margin-bottom:0'>{nombre_region}</h3>", unsafe_allow_html=True)
+                    # Obtener variables X e Y
+                    x_vars, y_var = variables_por_defecto[nombre_region]
+
+                    # Mostrar las variables utilizadas
+                    st.markdown(f"**Variables predictoras (X):** {', '.join(x_vars)}")
+                    st.markdown(f"**Variable objetivo (Y):** {y_var}")
+
+                    # Obtener las variables del diccionario
+                    try:
+                        x_vars, y_var = variables_por_defecto[nombre_region]
+                    except KeyError:
+                        st.warning(f"No se encontraron variables por defecto para {nombre_region}.")
+                        continue
+
+                    # Quitar variables irrelevantes
+                    x_vars = [var for var in x_vars if var != "id"]
+
+                    if not all(col in df_region.columns for col in x_vars + [y_var]):
+                        st.warning(f"Alguna de las columnas {x_vars + [y_var]} no existe en los datos de {nombre_region}.")
+                        continue
+
+                    X = df_region[x_vars]
+                    y = df_region[y_var]
+
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
                     model = LinearRegression()
                     model.fit(X_train, y_train)
                     y_pred = model.predict(X_test)
 
-                    fig, ax = plt.subplots()
-                    ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                    ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                    ax.set_xlabel(default_x)
-                    ax.set_ylabel(default_y)
+                    # Visualización con Seaborn
+                    df_viz = X_test.copy()
+                    df_viz[y_var] = y_test.values
+                    df_viz["Pred_" + y_var] = y_pred
+
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    sns.scatterplot(
+                        x=x_vars[0], y=y_var, data=df_viz,
+                        color="#6d38aa", label="Real", ax=ax, alpha=0.6
+                    )
+                    sns.scatterplot(
+                        x=x_vars[0], y="Pred_" + y_var, data=df_viz,
+                        color="#fbb77c", label="Predicción", ax=ax, alpha=0.6
+                    )
+                    ax.set_xlabel(x_vars[0])
+                    ax.set_ylabel(y_var)
                     ax.legend()
                     st.pyplot(fig)
-                    
+
                     with st.container():
-                        st.subheader("Resultados del Modelo")
-                        col10, col11, col12= st.columns(3)
-                        with col10:
-                            st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
+                        st.markdown("**Resultados del Modelo**")
+                        col11, col12 = st.columns(2)
                         with col11:
-                            r2 = r2_score(y_test, y_pred)
-                            st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
+                            r2 = model.score(X_test, y_test)
+                            st.metric("R²:", f"{r2:.2f}")
                         with col12:
-                            corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                            st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-                else:
-                    st.warning(f"No hay suficientes datos válidos para las variables en Victoria.")
+                            r = np.sqrt(r2)
+                            st.metric("Correlación (R):", f"{r:.2f}")
 
-            #Hotel room
-            MxH= dMx[(dMx["room_type"] == 4)]
-            MH= dM[(dM["room_type"] == 4)]
-            QH= dQ[(dQ["room_type"] == 4)]
-            VH= dV[(dV["room_type"] == 3)]
+#####COMPARACIÓN REGRESION LOGISTICA#######################################################################
+        if tipo_regresion == "Logística":
+            st.subheader("Regresión Logística")
 
-            st.title("Regresión Lineal Hotel Room")
-            col1, col2=  st.columns(2)
+            # Configuración de variables (igual que antes)
+            variables_por_defecto_logistica = {
+                "México": (["availability_365","availability_90", "availability_60"], "host_identity_verified"),
+                "Malta": (["calculated_host_listings_count","calculated_host_listings_count_entire_homes"], "instant_bookable"),
+                "Quebec": (["number_of_reviews", "number_of_reviews_ltm"], "host_is_superhost"),
+                "Victoria": (["number_of_reviews", "number_of_reviews_ltm"], "host_is_superhost")
+            }
 
-            with col1:
-                st.subheader("México")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
+            regiones = {"México": dMx, "Malta": dM, "Quebec": dQ, "Victoria": dV}
+            color_region = "#4B8BBE"
+            n = len(regiones)
+            items = list(regiones.items())
 
-                X = MxH[[default_x]]
-                y = MxH[default_y]
+            for i in range(0, n, 2):
+                col1, col2 = st.columns(2)
 
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                for j, col in enumerate([col1, col2]):
+                    if i + j >= n:
+                        break  # Evita index error si el número de regiones no es par
 
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
+                    nombre_region, df_region = items[i + j]
+                    with col:
+                        with st.container():
+                            st.markdown(f"<h3 style='color:{color_region}; margin-bottom:0'>{nombre_region}</h3>", unsafe_allow_html=True)
 
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
+                            try:
+                                x_vars, y_var = variables_por_defecto_logistica[nombre_region]
+                            except KeyError:
+                                st.warning(f"No se encontraron variables por defecto para {nombre_region}.")
+                                continue
 
-                st.subheader("Malta")
-                default_x = "bathrooms" if "accommodates" in numeric_cols2 else numeric_cols[0]
-                default_y = "accommodates" if "bathrooms" in numeric_cols2 else numeric_cols[0]
+                            if not all(col in df_region.columns for col in x_vars + [y_var]):
+                                st.warning(f"Alguna de las columnas {x_vars + [y_var]} no existe en los datos de {nombre_region}.")
+                                continue
 
-                X = MH[[default_x]]
-                y = MH[default_y]
+                            X = df_region[x_vars]
+                            y = df_region[y_var]
 
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                            if y.nunique() > 2:
+                                st.warning("La variable objetivo tiene más de 2 categorías. Selecciona una variable binaria.")
+                                continue
 
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
+                            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                            scaler = StandardScaler()
+                            X_train = scaler.fit_transform(X_train)
+                            X_test = scaler.transform(X_test)
 
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-            
-            with col2:
-                st.subheader("Quebec")
-                default_x = "host_response_rate" if "price" in numeric_cols2 else numeric_cols[0]
-                default_y = "price" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
+                            model = LogisticRegression(max_iter=1000)
+                            model.fit(X_train, y_train)
+                            y_pred = model.predict(X_test)
+                            y_pred_proba = model.predict_proba(X_test)[:, 1]
 
-                X = QH[[default_x]]
-                y = QH[default_y]
+                            # Métricas
+                            accuracy = accuracy_score(y_test, y_pred)
+                            precision = precision_score(y_test, y_pred)
+                            recall = recall_score(y_test, y_pred)
 
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                            # Matriz de confusión
+                            cm_ordenada = confusion_matrix(y_test, y_pred, labels=[1, 0])
+                            fig_cm, ax = plt.subplots()
+                            disp = ConfusionMatrixDisplay(confusion_matrix=cm_ordenada)
+                            disp.plot(cmap="Purples", ax=ax, colorbar=True)
+                            ax.set_title("Matriz de Confusión", fontsize=14)
+                            st.pyplot(fig_cm)
 
-                model = LinearRegression()
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
+                            #Variables
+                            st.markdown(f"**Variables predictoras (X):** {', '.join(x_vars)}")
+                            st.markdown(f"**Variable objetivo (Y):** {y_var}")
 
-                fig, ax = plt.subplots()
-                ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                ax.set_xlabel(default_x)
-                ax.set_ylabel(default_y)
-                ax.legend()
-                st.pyplot(fig)
-                
-                with st.container():
-                    st.subheader("Resultados del Modelo")
-                    col10, col11, col12= st.columns(3)
-                    with col10:
-                        st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                    with col11:
-                        r2 = r2_score(y_test, y_pred)
-                        st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                    with col12:
-                        corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                        st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
+                            # Métricas
+                            st.markdown("**Métricas:**")
+                            colm1, colm2, colm3 = st.columns(3)
+                            with colm1:
+                                st.metric("Precisión", f"{precision:.2%}")
+                            with colm2:
+                                st.metric("Exactitud", f"{accuracy:.2%}")
+                            with colm3:
+                                st.metric("Sensibilidad", f"{recall:.2%}")
 
-                st.subheader("Victoria")
-                default_x = "host_response_rate" if "price" in numeric_cols2 else numeric_cols[0]
-                default_y = "price" if "host_response_rate" in numeric_cols2 else numeric_cols[0]
-
-                X = VH[[default_x]]
-                y = VH[default_y]
-
-                if len(X) > 1:
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1, random_state=42)
-
-                    model = LinearRegression()
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
-
-                    fig, ax = plt.subplots()
-                    ax.scatter(X_test, y_test, color='#6d38aa', label='Datos reales')
-                    ax.scatter(X_test, y_pred, color='#fbb77c', label='Predicción')
-                    ax.set_xlabel(default_x)
-                    ax.set_ylabel(default_y)
-                    ax.legend()
-                    st.pyplot(fig)
-                    
-                    with st.container():
-                        st.subheader("Resultados del Modelo")
-                        col10, col11, col12= st.columns(3)
-                        with col10:
-                            st.metric("Intercepto:" ,f"{model.intercept_:.2f}")
-                        with col11:
-                            r2 = r2_score(y_test, y_pred)
-                            st.metric("Coeficiente de determinación:" ,f"{r2:.2f}")
-                        with col12:
-                            corr = np.sign(model.coef_[0]) * np.sqrt(r2)
-                            st.metric("Coeficiente de correlación (R):" ,f"{corr:.2f}")
-                else:
-                    st.warning(f"No hay suficientes datos válidos para la variable '{default_x}' en Victoria.")
-                
-
-
+############################# MAPA ##################################################
 if pagina == "Mapa": 
     st.title ("Mapa de ubicaciones")
     ciudad = option_menu(
@@ -3025,7 +2835,7 @@ if pagina == "Mapa":
             "nav-link-selected": {"background-color": "#AED6F1"}
         }
     )
-    
+
     if ciudad == "CDMX": 
          #Carga de dataframe original
         df_original = pd.read_csv("./dataset/Mexico.csv")
@@ -3079,7 +2889,7 @@ if pagina == "Mapa":
 
         # Mostramos el mapa
         st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip=tooltip, map_style="mapbox://styles/mapbox/light-v9"))
-    
+
     if ciudad == "Malta": 
          #Carga de dataframe original
         df_original = pd.read_csv("./dataset/Malta.csv")
@@ -3242,5 +3052,5 @@ if pagina == "Mapa":
 
         # Mostramos el mapa
         st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip=tooltip, map_style="mapbox://styles/mapbox/light-v9"))
-    
-    
+
+
