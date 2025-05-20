@@ -3,6 +3,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_option_menu import option_menu 
+import plotly.io as pio
 import plotly.express as px
 import pandas as pd
 import seaborn as sns
@@ -29,6 +30,32 @@ from sklearn.metrics import classification_report, confusion_matrix, ConfusionMa
 from sklearn.preprocessing import StandardScaler
 import plotly.graph_objects as go
 from streamlit.components.v1 import html
+
+# Configuración global de colores para Plotly
+purple_palette = ['#4A148C', '#6A1B9A', '#7B1FA2', '#9C27B0', '#AB47BC', '#BA68C8', '#CE93D8', '#E1BEE7']
+# Configurar el template global
+pio.templates.default = "plotly_white"
+pio.templates["custom"] = pio.templates["plotly_white"]
+pio.templates["custom"].layout.colorway = purple_palette
+pio.templates.default = "custom"
+px.defaults.color_discrete_sequence = purple_palette
+px.defaults.color_continuous_scale = purple_palette
+plt.style.use('seaborn-v0_8') # Fondo blanco con grid
+sns.set_palette(purple_palette)  # Usar nuestra paleta morada
+sns.set_style("whitegrid", {
+    'grid.color': '#E1BEE7',  # Grid morado claro
+    'axes.edgecolor': '#6A1B9A',  # Bordes morados
+    'axes.labelcolor': '#4A148C'  # Etiquetas morado oscuro
+})
+# Modifica la función get_fill_color para usar la paleta morada
+get_fill_color="""
+    [ 
+        price < 100 ? 100 : price < 200 ? 150 : 200,
+        price < 100 ? 50 : price < 200 ? 30 : 0,
+        price < 100 ? 180 : price < 200 ? 160 : 140,
+        160
+    ]
+"""
 
 
 # Ajustamos las medidas de la pantalla para el dashboard
@@ -72,13 +99,13 @@ def get_img_as_base64(file_path):
         data = f.read()
     return base64.b64encode(data).decode()
 
-img_base64 = get_img_as_base64("./img/LOGO.png")
+img_base64 = get_img_as_base64("./img/airbnb.png")
 
 def create_metric_card(title: str, value: str, icon: str = "") -> str:
     """Devuelve un snippet HTML para una tarjeta de métrica."""
     return f"""
     <div style="
-        background: #ffffff;
+        background: #ebdef0 ;
         border-radius: 8px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         padding: 16px;
@@ -92,7 +119,6 @@ def create_metric_card(title: str, value: str, icon: str = "") -> str:
         </div>
     </div>
     """
-
 components.html(f"""
     <style>
     .custom-header {{
@@ -100,7 +126,7 @@ components.html(f"""
         position: fixed;
         top: 0;
         left: 0;
-        height: 140px;
+        height: 110px;
         width: 100vw;
         z-index: 9999;
         display: flex;
@@ -145,6 +171,20 @@ def load_data():
     dM=dM.drop('Unnamed: 0', axis = 1)
     dV=dV.drop('Unnamed: 0', axis = 1)
     dMx=dMx.drop('Unnamed: 0', axis = 1)
+
+     # --- CONVERSIÓN DE MONEDAS ---
+    # Puedes actualizar estas tasas una vez por semana o mes
+    TASA_EUR_MXN = 21.76  # Malta
+    TASA_CAD_MXN = 13.93  # Quebec y Victoria
+
+    # Malta (EUR a MXN)
+    dM['price'] = dM['price'] * TASA_EUR_MXN
+
+    # Quebec y Victoria (CAD a MXN)
+    dQ['price'] = dQ['price'] * TASA_CAD_MXN
+    dV['price'] = dV['price'] * TASA_CAD_MXN
+
+    # México ya está en MXN
 
     #Cambiamos object por numeric
     dQ['host_identity_verified'] = dQ['host_identity_verified'].replace({'f': 0, 't': 1})
@@ -281,7 +321,7 @@ with st.sidebar:
         default_index = 0, 
         orientation = "vertical",
         styles = {
-            "container" : {"padding": "5px", "background-color": "#transparent"},
+            "container" : {"padding": "5px", "background-color": "transparent", "box-shadow": "none", "border": "none"},
             "icon" : {"color": "#2C3E50", "font-size" : "40px"},
             "nav-link": {
                 "font-size": "0px",
@@ -295,7 +335,6 @@ with st.sidebar:
 
 #Home Page
 if pagina == "Home Page": 
-    st.markdown("Aquí puedes explorar diversos análisis de datos de la ciudad seleccionada. Visualiza tendencias, distribuciones y aplica modelos predictivos fácilmente.")
     st.image("./img/GROWTHTRACK.png", use_container_width=True)
 
      # — Selección de sitio en Home Page —
@@ -355,7 +394,7 @@ if pagina == "Home Page":
 
         cols = st.columns(3)
         metrics = [
-            ("Precio Promedio", f"€{df_city['price'].mean():.2f}", "&#128181"),
+            ("Precio Promedio", f"${df_city['price'].mean():.2f}", "&#128181"),
             ("Valoración Media", f"{df_city['review_scores_rating'].mean():.1f}/5" if 'review_scores_rating' in df_city else "N/A", "&#11088"),
             ("Propiedades", len(df_city), "&#127976;&#65039")
         ]
@@ -368,10 +407,14 @@ if pagina == "Home Page":
 
     st.markdown("---")
 
+    st.info("Todos los precios han sido convertidos a **pesos mexicanos (MXN)** usando tasas aproximadas.")
+
 
 ###################################################################################################################################
 
 if pagina == "Lugares": 
+
+    st.title("NAVEGA POR CADA CIUDAD")
     col1, col2, col3 = st.columns([1,2,3])
 
     with col1:
@@ -1795,7 +1838,7 @@ if pagina == "Lugares":
                     st.info("Selecciona una variable dependiente dicotómica y al menos una independiente.")
 
 ###########################################################################################################################################################    
-    if pais == "Maqlta" and ciudad == "Malta":
+    if pais == "Malta" and ciudad == "Malta":
         st.title("Malta")
         sub_opcion = option_menu(
             menu_title=None,
@@ -2823,7 +2866,7 @@ if pagina == "Comparacion":
 
 ############################# MAPA ##################################################
 if pagina == "Mapa": 
-    st.title ("Mapa de ubicaciones")
+    st.title ("MAPA DE UBICACIONES")
     ciudad = option_menu(
         menu_title=None,
         options=["CDMX", "Malta", "Quebec", "Victoria"],
@@ -2865,8 +2908,8 @@ if pagina == "Mapa":
             pickable = True,
             get_fill_color="""
                 [ 
-                    price < 100 ? 0 : price < 200 ? 255 : 200,
-                    price < 100 ? 200 : price < 200 ? 140 : 0,
+                    price < 500 ? 0 : price < 1000 ? 255 : 200,
+                    price < 1500 ? 200 : price < 2000 ? 140 : 0,
                     150,
                     160
                 ]
